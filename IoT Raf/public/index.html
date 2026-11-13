@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="sr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1b1f24">
+<title>Smart Parking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--asphalt:#1b1f24;--bay:#262b32;--paint:#f5c518;--ink:#eef1f4;--muted:#98a2ae;
+  --free:#34c27a;--busy:#ef5350;--move:#f5a524;--paper:#eef0f2;--paper-ink:#1b1f24;--c:var(--free);
+  --font:"Barlow",system-ui,sans-serif;--num:"Barlow Semi Condensed","Barlow",system-ui,sans-serif}
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;background:var(--asphalt);color:var(--ink);font:500 16px/1.4 var(--font);display:flex;justify-content:center;padding:20px 16px 32px}
+main{width:100%;max-width:540px;display:grid;gap:18px;align-content:start}
+main[data-state=ZAUZETO]{--c:var(--busy)}
+main[data-state=ULAZI],main[data-state=IZLAZI]{--c:var(--move)}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+h1{font:700 26px/1 var(--num);letter-spacing:.2px}
+.clock{text-align:right}
+.clock b{display:block;font:600 26px/1 var(--num);font-variant-numeric:tabular-nums}
+.clock span{font-size:13px;color:var(--muted)}
+.scene{--x:-140px;position:relative;height:200px;border-radius:18px;background:var(--bay);overflow:hidden}
+main[data-state=ULAZI] .scene,main[data-state=IZLAZI] .scene{--x:20%}
+main[data-state=ZAUZETO] .scene{--x:calc(74% - 14px - 55px)}
+.bay{position:absolute;top:18px;bottom:18px;right:14px;width:52%;border:4px solid var(--paint);border-left:0;
+  display:grid;place-items:center;background:color-mix(in srgb,var(--c) 14%,transparent);transition:background .6s}
+.bay span{font:700 64px/1 var(--num);color:var(--paint);opacity:.55;transition:opacity .5s}
+main[data-state=ZAUZETO] .bay span{opacity:0}
+.car{position:absolute;top:50%;left:var(--x);width:110px;transform:translateY(-50%);
+  transition:left 1.6s cubic-bezier(.45,0,.2,1),transform .4s}
+.car.back{transform:translateY(-50%) scaleX(-1)}
+.post{position:absolute;left:8px;top:8px;width:14px;height:14px;border-radius:4px;background:#59626d}
+.arm{position:absolute;left:12px;top:12px;width:150px;height:6px;border-radius:3px;transform-origin:3px 50%;
+  transform:rotate(90deg);transition:transform .9s cubic-bezier(.5,0,.2,1);
+  background:repeating-linear-gradient(90deg,#f3f4f6 0 14px,var(--busy) 14px 28px)}
+.arm.open{transform:rotate(0)}
+.status{display:flex;align-items:center;gap:14px}
+.dot{position:relative;width:16px;height:16px;border-radius:50%;background:var(--c);flex:none;transition:background .4s}
+.dot::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--c);animation:ping 2s ease-out infinite}
+@keyframes ping{from{transform:scale(1);opacity:.6}to{transform:scale(2.6);opacity:0}}
+.status h2{font:700 34px/1 var(--num)}
+.status p{color:var(--muted);font-size:14px;margin-top:2px}
+.ticket{background:var(--paper);color:var(--paper-ink);border-radius:16px;padding:18px 18px 14px;box-shadow:0 10px 30px #0002}
+.stats{display:grid;grid-template-columns:1.25fr 1fr .8fr;gap:12px}
+.stats div{min-width:0}
+.stats small{display:block;font-size:13px;color:#5d6773}
+.stats b{display:block;font:700 30px/1.15 var(--num);font-variant-numeric:tabular-nums;white-space:nowrap;transition:color .4s}
+.stats.idle b{color:#aab2bb}
+.u{font:500 14px var(--font);font-style:normal;color:#5d6773}
+#cost{display:inline-block;transform-origin:left}
+#cost.bump{animation:bump .5s}
+@keyframes bump{40%{transform:scale(1.25);color:var(--busy)}}
+.receipt{margin-top:14px;padding-top:12px;border-top:2px dashed #c3c9d0;display:flex;justify-content:space-between;gap:10px;font-size:15px;color:#46505b}
+.receipt[hidden]{display:none}
+.rate{margin-top:10px;font-size:13px;color:#5d6773}
+footer{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px;flex-wrap:wrap}
+footer i{width:8px;height:8px;border-radius:50%;background:#59626d;transition:background .4s}
+footer.on i{background:var(--free)}
+footer.error i{background:var(--busy)}
+@media(max-width:390px){.stats{grid-template-columns:1fr 1fr}.stats div:last-child{grid-column:1/-1}.stats b{font-size:27px}.scene{height:180px}}
+@media(prefers-reduced-motion:reduce){*,*::after{animation:none!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<main id="app" data-state="SLOBODNO">
+  <header>
+    <h1>Smart Parking</h1>
+    <div class="clock"><b id="clk">00:00:00</b><span id="dt"></span></div>
+  </header>
+
+  <section class="scene" aria-hidden="true">
+    <div class="bay"><span>P</span></div>
+    <svg id="car" class="car" viewBox="0 0 110 52">
+      <rect x="2" y="3" width="106" height="46" rx="16" fill="#cfd8e3"/>
+      <rect x="64" y="9" width="20" height="34" rx="5" fill="#2b323a"/>
+      <rect x="40" y="8" width="22" height="36" rx="6" fill="#b3bfcc"/>
+      <rect x="22" y="10" width="16" height="32" rx="4" fill="#3a434d"/>
+      <circle cx="102" cy="12" r="4" fill="#ffe08a"/><circle cx="102" cy="40" r="4" fill="#ffe08a"/>
+      <circle cx="6" cy="12" r="3" fill="#e5484d"/><circle cx="6" cy="40" r="3" fill="#e5484d"/>
+    </svg>
+    <div class="post"></div><div class="arm" id="arm"></div>
+  </section>
+
+  <div class="status" role="status" aria-live="polite">
+    <span class="dot"></span>
+    <div><h2 id="stxt">Slobodno</h2><p id="sub">Rampa je zatvorena</p></div>
+  </div>
+
+  <section class="ticket" aria-label="Naplata">
+    <div class="stats idle" id="stats">
+      <div><small>Parkirano</small><b id="dur">--:--:--</b></div>
+      <div><small>Za naplatu</small><b><span id="cost">0</span> <i class="u">RSD</i></b></div>
+      <div><small>Dolazak</small><b id="from">--:--</b></div>
+    </div>
+    <div class="receipt" id="rcp" hidden><span>Poslednji račun</span><b id="rv"></b></div>
+    <p class="rate" id="rate">Cena: 10 RSD za svaki pun minut</p>
+  </section>
+
+  <footer id="dev"><i></i><span id="devtxt">Povezivanje...</span><span id="demo"></span></footer>
+</main>
+
+<!-- Firebase compat SDK: Realtime Database + anonimna prijava samo za čitanje -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// Firebase Console -> Project settings -> Your apps -> Web app config.
+// Kopiraj svoje vrednosti ovde. API key nije lozinka; pristup bazi štite Authentication i Rules.
+const cfg = {
+  apiKey: "AIzaSyDXZD6hVfx45nvRwWzxoeZQm-9UtfbsmzM",
+  authDomain: "iotraf2027.firebaseapp.com",
+  databaseURL: "https://iotraf2027-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "iotraf2027",
+  appId: "1:366654831281:web:bd29dddee28b12e5f88090"
+};
+const DEMO = Object.values(cfg).some(v => String(v).includes("ZAMENI_"));
+
+const $ = id => document.getElementById(id), p2 = n => String(n).padStart(2, "0");
+const DAYS = ["nedelja","ponedeljak","utorak","sreda","četvrtak","petak","subota"];
+const MONTHS = ["januar","februar","mart","april","maj","jun","jul","avgust","septembar","oktobar","novembar","decembar"];
+const TEXT = {SLOBODNO:"Slobodno", ULAZI:"Auto ulazi", ZAUZETO:"Zauzeto", IZLAZI:"Auto izlazi"};
+const hms = s => p2(Math.floor(s/3600)) + ":" + p2(Math.floor(s/60)%60) + ":" + p2(s%60);
+
+let S = {state:"SLOBODNO", gate:false, since:0, cost:0, price:10, last:null, seen:0};
+let off = 0, prev = "SLOBODNO", dbError = false;
+
+function render() {
+  $("app").dataset.state = S.state;
+  $("stxt").textContent = TEXT[S.state] || S.state;
+  $("sub").textContent = S.gate ? "Rampa je otvorena" : "Rampa je zatvorena";
+  $("arm").classList.toggle("open", !!S.gate);
+  $("rate").textContent = "Cena: " + (Number(S.price) || 0) + " RSD za svaki pun minut";
+  const car = $("car");
+  if (S.state === "IZLAZI" || (S.state === "SLOBODNO" && prev !== "SLOBODNO")) car.classList.add("back");
+  else if (S.state !== "SLOBODNO") car.classList.remove("back");
+  prev = S.state;
+}
+
+function tick() {
+  const d = new Date(), now = Date.now() + off;
+  $("clk").textContent = p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds());
+  $("dt").textContent = DAYS[d.getDay()] + ", " + d.getDate() + ". " + MONTHS[d.getMonth()] + " " + d.getFullYear() + ".";
+
+  const busy = S.state === "ZAUZETO" && Number(S.since) > 0;
+  const sec = busy ? Math.max(0, Math.floor((now - Number(S.since)*1000) / 1000)) : 0;
+  const cost = busy ? Math.max(Number(S.cost) || 0, Math.floor(sec/60) * (Number(S.price) || 0)) : 0;
+  $("stats").classList.toggle("idle", !busy);
+  $("dur").textContent = busy ? hms(sec) : "--:--:--";
+  const st = new Date(Number(S.since) * 1000);
+  $("from").textContent = busy && !Number.isNaN(st.getTime()) ? p2(st.getHours()) + ":" + p2(st.getMinutes()) : "--:--";
+
+  const c = $("cost");
+  if (c.textContent !== String(cost)) {
+    c.textContent = cost;
+    if (cost > 0) { c.classList.remove("bump"); void c.offsetWidth; c.classList.add("bump"); }
+  }
+
+  const r = S.last, showR = !busy && r && r.cost != null;
+  $("rcp").hidden = !showR;
+  if (showR) {
+    const receiptSec = Math.max(0, Number(r.sec) || 0);
+    $("rv").textContent = Math.floor(receiptSec/60) + " min " + receiptSec%60 + " s, " + (Number(r.cost) || 0) + " RSD";
+  }
+
+  const on = Number(S.seen) > 0 && now - Number(S.seen) < 45000;
+  $("dev").className = dbError ? "error" : (on ? "on" : "");
+  $("devtxt").textContent = dbError ? "Greška pristupa Firebase bazi" : (on ? "ESP32 povezan" : "ESP32 nije povezan");
+}
+
+function demo() {
+  $("demo").textContent = "Demo prikaz — unesi Firebase podatke za stvarne vrednosti";
+  const seq = [["SLOBODNO",4000],["ULAZI",4000],["ZAUZETO",18000],["IZLAZI",5000]]; let i = 0;
+  S.seen = Date.now(); setInterval(() => { S.seen = Date.now(); }, 5000);
+  (function next() {
+    const [st, ms] = seq[i++ % 4], n = Date.now();
+    S = {...S, state:st, gate: st === "ULAZI" || st === "IZLAZI", since: st === "ZAUZETO" ? Math.floor((n-55000)/1000) : 0,
+      last: st === "IZLAZI" ? {sec:73, cost:10} : S.last};
+    render(); tick(); setTimeout(next, ms);
+  })();
+}
+
+if (DEMO) {
+  demo();
+} else {
+  try {
+    firebase.initializeApp(cfg);
+    const auth = firebase.auth();
+    const db = firebase.database();
+    db.ref(".info/serverTimeOffset").on("value", s => { off = s.val() || 0; });
+    auth.signInAnonymously().then(() => {
+      db.ref("parking").on("value", s => {
+        const data = s.val();
+        if (data) S = {...S, ...data};
+        render(); tick();
+      }, err => {
+        dbError = true;
+        console.error("Firebase Database:", err);
+        tick();
+      });
+    }).catch(err => {
+      dbError = true;
+      console.error("Firebase Authentication:", err);
+      tick();
+    });
+  } catch (err) {
+    dbError = true;
+    console.error(err);
+  }
+}
+render(); tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>

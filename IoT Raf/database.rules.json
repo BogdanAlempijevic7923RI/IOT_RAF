@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "parking": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'parking-device@example.com'"
+    }
+  }
+}
