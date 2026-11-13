@@ -1,25 +1,3 @@
-/*
-  SMART PARKING + FIREBASE REALTIME DATABASE
-  Board: WEMOS LOLIN32 / ESP32
-
-  Libraries to install in Arduino IDE:
-    - ESP32Servo (Kevin Harrington / John K. Bennett)
-    - ArduinoJson (Benoit Blanchon)
-
-  ESP32 Arduino core already provides WiFi, HTTPClient and WiFiClientSecure.
-
-  Firebase data written to /parking:
-    state, gate, since, cost, price, last { sec, cost }, seen
-
-  IMPORTANT:
-    - Create an Email/Password Firebase Auth user with email:
-        parking-device@example.com
-    - Put that user's password below.
-    - Set the same email in database.rules.json if you change it here.
-    - For a prototype this sketch uses client.setInsecure() for HTTPS.
-      That skips certificate verification. Use a CA certificate for a public/production installation.
-*/
-
 #include <ESP32Servo.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -28,14 +6,14 @@
 #include <time.h>
 
 // ===================== WIFI / FIREBASE PODESAVANJA =====================
-const char* WIFI_SSID     = "TVOJ_WIFI_NAZIV";
-const char* WIFI_PASSWORD = "TVOJA_WIFI_LOZINKA";
+const char* WIFI_SSID     = "";
+const char* WIFI_PASSWORD = "";
 
-const char* FIREBASE_API_KEY = "ZAMENI_API_KEY";
-// Kopiraj TAČAN URL iz Realtime Database konzole. Bez završne kose crte.
-const char* FIREBASE_DATABASE_URL = "https://ZAMENI_PROJECT_ID-default-rtdb.europe-west1.firebasedatabase.app";
-const char* FIREBASE_DEVICE_EMAIL = "parking-device@example.com";
-const char* FIREBASE_DEVICE_PASSWORD = "OVDE_UNESI_LOZINKU";
+const char* FIREBASE_API_KEY = "";
+
+const char* FIREBASE_DATABASE_URL = "";
+const char* FIREBASE_DEVICE_EMAIL = "";
+const char* FIREBASE_DEVICE_PASSWORD = "";
 
 const unsigned long FIREBASE_HEARTBEAT_MS = 10000; // osveži signal uređaja na 10 s
 const unsigned long WIFI_RETRY_MS = 10000;
@@ -201,7 +179,7 @@ String urlEncode(const String& value) {
 
 bool postHttps(const String& url, const String& body, const char* contentType, String& response, int& statusCode) {
   WiFiClientSecure client;
-  // Pojednostavljenje za prototip. Za javnu/produkcijsku instalaciju dodaj CA sertifikat.
+
   client.setInsecure();
 
   HTTPClient http;
@@ -301,7 +279,7 @@ void publishParkingToFirebase() {
   doc["since"] = state == ST_OCCUPIED ? parkStartEpoch : 0;
   doc["cost"] = totalCost;
   doc["price"] = PRICE_PER_INTERVAL;
-  // Firebase server timestamp (ms), nezavisi od ESP32 sata za heartbeat.
+
   JsonObject seen = doc.createNestedObject("seen");
   seen[".sv"] = "timestamp";
 
@@ -321,7 +299,7 @@ void publishParkingToFirebase() {
   String url = databaseUrl + "/parking.json?auth=" + urlEncode(firebaseIdToken);
 
   WiFiClientSecure client;
-  // Pojednostavljenje za prototip. Za javnu/produkcijsku instalaciju dodaj CA sertifikat.
+
   client.setInsecure();
   HTTPClient http;
   http.setConnectTimeout(1800);
@@ -348,8 +326,7 @@ void publishParkingToFirebase() {
 }
 
 void serviceFirebase() {
-  // Ne pokreći HTTPS zahtev dok se servo fizički pomera.
-  // To smanjuje mogućnost da mrežni zahtev uspori kretanje rampe.
+
   if (servoAngle != servoTarget) return;
   unsigned long now = millis();
   if (!firebaseDirty && now - lastFirebaseHeartbeat < FIREBASE_HEARTBEAT_MS) return;
